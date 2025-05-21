@@ -1,13 +1,5 @@
 ﻿const apiBaseUrl = "https://localhost:7102/api";
 
-$("#registerForm").on("submit", function (e) {
-    e.preventDefault();
-    $.post(`${apiBaseUrl}/Auth/register`, {
-        username: $("#regUsername").val(),
-        password: $("#regPassword").val()
-    }).done(() => alert("Registered successfully"))
-      .fail(() => alert("Registration failed"));
-});
 
 $("#loginForm").on("submit", function (e) {
     e.preventDefault();
