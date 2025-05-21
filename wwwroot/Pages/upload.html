@@ -1,0 +1,241 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Upload Document</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(to right, #74ebd5, #ACB6E5);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            padding-top: 40px;
+        }
+
+        h2, h3 {
+            color: #333;
+            margin-bottom: 1rem;
+        }
+
+        #fileInput {
+            padding: 0.7rem;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+            font-size: 1rem;
+            width: 250px;
+        }
+
+        button {
+            padding: 0.7rem 1.5rem;
+            background-color: #4a90e2;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            cursor: pointer;
+            margin: 0.5rem;
+        }
+
+            button:hover {
+                background-color: #357ABD;
+            }
+
+        #fileList {
+            margin-top: 2rem;
+            width: 90%;
+            max-width: 600px;
+            background: #fff;
+            border-radius: 8px;
+            padding: 1rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        .file-item {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .file-name {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .revision-list {
+            margin-left: 1rem;
+        }
+
+        .download-btn, .revision-download-btn {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 0.4rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 1rem;
+        }
+
+            .download-btn:hover, .revision-download-btn:hover {
+                background-color: #218838;
+            }
+
+        .show-revisions {
+            background-color: #ffc107;
+            color: black;
+            border: none;
+            padding: 0.3rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        @media (max-width: 480px) {
+            #fileInput, button {
+                width: 90%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h2>Upload File</h2>
+    <input type="file" id="fileInput"><br>
+    <div>
+        <button onclick="uploadFile()">Upload</button>
+      
+        <button onclick="logout()">Logout</button>
+    </div>
+
+    <div id="fileList">
+        <h3>Uploaded Files</h3>
+        <div id="filesContainer"></div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        const apiBaseUrl = "https://localhost:7102/api";
+
+        function uploadFile() {
+            const file = $("#fileInput")[0].files[0];
+            if (!file) {
+                alert("Please select a file first.");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("file", file);
+
+            $.ajax({
+                url: `${apiBaseUrl}/Files/upload`,
+                type: "POST",
+                headers: {
+                    "Authorization": "Bearer " + localStorage.getItem("token")
+                },
+                data: formData,
+                contentType: false,
+                processData: false,
+                success: () => {
+                    alert("File uploaded successfully");
+                    loadFileHistory();
+                },
+                error: () => alert("Upload failed")
+            });
+        }
+
+        function loadFileHistory() {
+            $.ajax({
+                url: `${apiBaseUrl}/Files/list`,
+                type: "GET",
+                headers: {
+                    "Authorization": "Bearer " + localStorage.getItem("token")
+                },
+                success: function (files) {
+                    const container = $("#filesContainer");
+                    container.empty();
+                    if (!Array.isArray(files) || files.length === 0) {
+                        container.append("<p>No uploaded files yet.</p>");
+                        return;
+                    }
+
+                    files.forEach(file => {
+                        const fileDiv = $(`
+                            <div class="file-item">
+                                <span class="file-name">📄 ${file}</span>
+                                <button class="download-btn" onclick="downloadFile('${file}')">Download Latest</button>
+                                <button class="show-revisions" onclick="toggleRevisions(this, '${file}')">Show Revisions</button>
+                                <div class="revision-list" style="display:none"></div>
+                            </div>
+                        `);
+                        container.append(fileDiv);
+                    });
+                },
+                error: () => {
+                    $("#filesContainer").html("<p>Failed to load file history.</p>");
+                }
+            });
+        }
+
+        function downloadFile(fileName, revision = null) {
+            const token = localStorage.getItem("token");
+            const url = revision === null
+                ? `${apiBaseUrl}/Files/${encodeURIComponent(fileName)}?access_token=${token}`
+                : `${apiBaseUrl}/Files/${encodeURIComponent(fileName)}?revision=${revision}&access_token=${token}`;
+            window.open(url, "_blank");
+        }
+
+        function toggleRevisions(button, fileName) {
+            const revisionList = $(button).siblings(".revision-list");
+
+            if (revisionList.is(":visible")) {
+                revisionList.slideUp();
+                button.textContent = "Show Revisions";
+                return;
+            }
+
+            // Fetch revision list from API
+            $.ajax({
+                url: `${apiBaseUrl}/Files/revisions/${encodeURIComponent(fileName)}`,
+                type: "GET",
+                headers: {
+                    "Authorization": "Bearer " + localStorage.getItem("token")
+                },
+                success: function (revisions) {
+                    revisionList.empty();
+
+                    if (!Array.isArray(revisions) || revisions.length === 0) {
+                        revisionList.append("<div>No revisions available.</div>");
+                    } else {
+                        revisions.forEach(rev => {
+                            revisionList.append(`<div>- Revision ${rev} → <button class='revision-download-btn' onclick="downloadFile('${fileName}', ${rev})">Download</button></div>`);
+                        });
+                    }
+
+                    revisionList.slideDown();
+                    button.textContent = "Hide Revisions";
+                },
+                error: function () {
+                    revisionList.html("<div>Failed to load revisions.</div>");
+                    revisionList.slideDown();
+                }
+            });
+        }
+
+      
+
+        function logout() {
+            localStorage.removeItem("token");
+            window.location.href = "login.html";
+        }
+
+        $(document).ready(function () {
+            loadFileHistory();
+        });
+    </script>
+
+</body>
+</html>
+
+
